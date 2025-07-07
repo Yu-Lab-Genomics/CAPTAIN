@@ -19,23 +19,23 @@ CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Oth
 
 1.  **Install Anaconda:** If you haven't already, download and install Anaconda from the official website: [https://www.anaconda.com/download/](https://www.anaconda.com/download/)
 
-2.  **Create the environment:** Navigate to the root directory of this repository in your terminal or Anaconda Prompt. Then, execute the following command to create the environment based on the provided `environment.yml` file:
+2.  **Create the environment:** Navigate to the root directory of this repository in your terminal or Anaconda Prompt. Then, execute the following command to create the CAPTAIN environment:
 
     ```bash
-    conda env create -f environment.yml
+    conda env create -n CAPTAIN
     ```
-
-    This command will create a new conda environment with all the necessary dependencies and configurations as specified in the `environment.yml` file, guaranteeing a complete and reproducible environment for optimal performance of the model.
 
 3.  **Activate the environment:** Once the environment is created, activate it using the following command:
 
     ```bash
     conda activate captain
     ```
-Alternatively, for users who prefer using pip, we have also included a `requirements.txt` file. This file lists the necessary Python packages required to run the model.
+4.  **Install requried packages:** We have included a `requirements.txt` file. This file lists the necessary Python packages required to run the model:
 
-    
+    ```bash
     pip install -r requirements.txt
+    ```
+
     
 **Notes on FlashAttention for Accelerated Training:**
 
