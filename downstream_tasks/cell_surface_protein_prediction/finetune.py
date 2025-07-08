@@ -266,9 +266,7 @@ if __name__ == "__main__":
 
     set_seed(args.seed)
 
-    if args.mode == "train":
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
     human_mouse_align = read_pickle_file('/home/jiboya/captain/token_dict/human_mouse_align.pickle')
