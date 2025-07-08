@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.distributions import Bernoulli
 from tqdm import trange
-
+from torch.autograd import Function
 try:
     from flash_attn.flash_attention import FlashMHA
 
@@ -21,13 +21,107 @@ except ImportError:
     warnings.warn("flash_attn is not installed")
     flash_attn_available = False
 
-from .dsbn import DomainSpecificBatchNorm1d
-from .grad_reverse import grad_reverse
+# The code is modified from https://github.com/wgchang/DSBN/blob/master/model/dsbn.py
+class _DomainSpecificBatchNorm(nn.Module):
+    _version = 2
+
+    def __init__(
+        self,
+        num_features: int,
+        num_domains: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ):
+        super(_DomainSpecificBatchNorm, self).__init__()
+        self._cur_domain = None
+        self.num_domains = num_domains
+        self.bns = nn.ModuleList(
+            [
+                self.bn_handle(num_features, eps, momentum, affine, track_running_stats)
+                for _ in range(num_domains)
+            ]
+        )
+
+    @property
+    def bn_handle(self) -> nn.Module:
+        raise NotImplementedError
+
+    @property
+    def cur_domain(self) -> Optional[int]:
+        return self._cur_domain
+
+    @cur_domain.setter
+    def cur_domain(self, domain_label: int):
+        self._cur_domain = domain_label
+
+    def reset_running_stats(self):
+        for bn in self.bns:
+            bn.reset_running_stats()
+
+    def reset_parameters(self):
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def _check_input_dim(self, input: torch.Tensor):
+        raise NotImplementedError
+
+    def forward(self, x: torch.Tensor, domain_label: int) -> torch.Tensor:
+        self._check_input_dim(x)
+        if domain_label >= self.num_domains:
+            raise ValueError(
+                f"Domain label {domain_label} exceeds the number of domains {self.num_domains}"
+            )
+        bn = self.bns[domain_label]
+        self.cur_domain = domain_label
+        return bn(x)
+
+
+class DomainSpecificBatchNorm1d(_DomainSpecificBatchNorm):
+    @property
+    def bn_handle(self) -> nn.Module:
+        return nn.BatchNorm1d
+
+    def _check_input_dim(self, input: torch.Tensor):
+        if input.dim() > 3:
+            raise ValueError(
+                "expected at most 3D input (got {}D input)".format(input.dim())
+            )
+
+
+class DomainSpecificBatchNorm2d(_DomainSpecificBatchNorm):
+    @property
+    def bn_handle(self) -> nn.Module:
+        return nn.BatchNorm2d
+
+    def _check_input_dim(self, input: torch.Tensor):
+        if input.dim() != 4:
+            raise ValueError("expected 4D input (got {}D input)".format(input.dim()))
+
+
+
+
+
+class GradReverse(Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, lambd: float) -> torch.Tensor:
+        ctx.lambd = lambd
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
+        return grad_output.neg() * ctx.lambd, None
+
+
+def grad_reverse(x: torch.Tensor, lambd: float = 1.0) -> torch.Tensor:
+    return GradReverse.apply(x, lambd)
+
 # sinusoidal positional embeddings
 class Human_RNA_Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        gene2vec_weight = np.load('/home/jiboya/scBLIP/prior_know/final_human_prior_knwo.npy')
+        gene2vec_weight = np.load('/home/jiboya/captain/prior_know/final_human_prior_knwo.npy')
         gene2vec_weight = torch.from_numpy(gene2vec_weight)
         self.emb = nn.Embedding.from_pretrained(gene2vec_weight)
 
@@ -38,7 +132,7 @@ class Human_RNA_Embedding(nn.Module):
 class Mouse_RNA_Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        gene2vec_weight = np.load('/home/jiboya/scBLIP/prior_know/final_mouse_prior_knwo.npy')
+        gene2vec_weight = np.load('/home/jiboya/captain/prior_know/final_mouse_prior_knwo.npy')
         gene2vec_weight = torch.from_numpy(gene2vec_weight)
         self.emb = nn.Embedding.from_pretrained(gene2vec_weight)
 
