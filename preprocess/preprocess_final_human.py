@@ -1,11 +1,8 @@
 import scanpy as sc, numpy as np, pandas as pd, anndata as ad
-from scipy import sparse
 import pickle as pkl
-import mudata as md
-from mudata import MuData
 import muon as mu
-import os,itertools
-import math,json,scipy,sys
+import os
+import json,scipy,sys
 import scipy.sparse as sp
 
 # Function to read JSON files
@@ -14,17 +11,17 @@ def read_json_file(file_path):
         data = json.load(file)
     return data
 
-vocab_temp = read_json_file("/home/jiboya/captain/vocab.json")
+vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
 
-with open('/home/jiboya/captain/human_mouse_align.pickle', 'rb') as fp:
+with open('/home/jiboya/captain/token_dict/human_mouse_align.pickle', 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('/home/jiboya/captain/adt_token_dict.pickle', 'rb') as fp:
-    adt_token_dict = pkl.load(fp)
-with open('/home/jiboya/captain/adt_align_dict.pickle', 'rb') as fp:
-    adt_align_dict = pkl.load(fp)
+with open('/home/jiboya/captain/token_dict/csp_token_dict.pickle', 'rb') as fp:
+    csp_token_dict = pkl.load(fp)
+with open('/home/jiboya/captain/token_dict/csp_align_dict.pickle', 'rb') as fp:
+    csp_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
-    sc.pp.filter_genes(data, min_counts=10)
+    sc.pp.filter_genes(data, min_counts=20)
     sc.pp.filter_cells(data, min_counts=200)
     sc.pp.normalize_total(data)
     sc.pp.log1p(data)
@@ -39,16 +36,16 @@ def preprocss_rna(data, species):
         sys.exit()
     return data
 
-def preprocss_adt(data, species):
+def preprocss_adt(data):
     sc.pp.normalize_total(data)
     sc.pp.log1p(data)
     sc.pp.scale(data)
-    data.var = data.var.rename(index=adt_align_dict)
+    data.var = data.var.rename(index=csp_align_dict)
     data.var_names = data.var.index
     duplicated_genes = data.var_names.duplicated(keep='first')
     genes_to_keep = ~duplicated_genes
     data = data[:, genes_to_keep]
-    gene_name = list(adt_token_dict.keys())
+    gene_name = list(csp_token_dict.keys())
     adt_name = data.var.index.tolist()
     common_elements = set(adt_name) & set(gene_name)
     print("Number of ADT genes present in both the ADT list and AnnData object:", len(common_elements))
