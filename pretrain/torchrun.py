@@ -1,45 +1,26 @@
 from rna_model import TransformerModel, AdversarialDiscriminator
-from protein_model import BLIP_Pretrain
-from protein_model.loss import masked_mse_loss, quantile_loss, masked_relative_error, criterion_neg_log_bernoulli
-import scanpy as sc
-import numpy as np
-import pandas as pd
-import anndata as ad
-import pickle as pkl
-import mudata as md
-from mudata import MuData
-import muon as mu
-import os
-import json
-from tqdm import tqdm
+from protein_model import BLIP_Pretrain,masked_mse_loss, quantile_loss
+
+import numpy as np,pandas as pd,anndata as ad,pickle as pkl,muon as mu,scgpt as scg,scanpy as sc
+import os,json,sys,time,random,warnings,torch,scipy
 import scipy.sparse as sp
 from pathlib import Path
-import shutil
-import sys
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-import time
-import random
-from typing import List, Tuple, Dict, Union, Optional
-import warnings
+from typing import Tuple, Dict
 from torch.utils.data.distributed import DistributedSampler
-import torch
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
-import scipy
 from scipy.sparse import issparse
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
-sys.path.insert(0, "../")
-import scgpt as scg
 from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
 from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
 from scgpt import SubsetsBatchSampler
-from scgpt.utils import set_seed, category_str2int, eval_scib_metrics
-
-sc.set_figure_params(figsize=(6, 6))
+from scgpt.utils import set_seed
+sys.path.insert(0, "../")
 os.environ["KMP_WARNINGS"] = "off"
 warnings.filterwarnings('ignore')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
@@ -49,17 +30,17 @@ def read_json_file(file_path):
         data = json.load(file)
     return data
 
-vocab_temp = read_json_file("/home/jiboya/captain/vocab.json")
+vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
 
-with open('/home/jiboya/captain/human_mouse_align.pickle', 'rb') as fp:
+with open('/home/jiboya/captain/token_dict/human_mouse_align.pickle', 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('/home/jiboya/captain/adt_token_dict.pickle', 'rb') as fp:
-    adt_token_dict = pkl.load(fp)
-with open('/home/jiboya/captain/adt_align_dict.pickle', 'rb') as fp:
-    adt_align_dict = pkl.load(fp)
+with open('/home/jiboya/captain/token_dict/csp_token_dict.pickle', 'rb') as fp:
+    csp_token_dict = pkl.load(fp)
+with open('/home/jiboya/captain/token_dict/csp_align_dict.pickle', 'rb') as fp:
+    csp_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
-    sc.pp.filter_genes(data, min_counts=10)
+    sc.pp.filter_genes(data, min_counts=20)
     sc.pp.filter_cells(data, min_counts=200)
     if species == "mouse":
         data.var = data.var.rename(index=human_mouse_align)
@@ -72,16 +53,16 @@ def preprocss_rna(data, species):
         sys.exit()
     return data
 
-def preprocss_adt(data, species):
+def preprocss_adt(data):
     sc.pp.normalize_total(data)
     sc.pp.log1p(data)
     sc.pp.scale(data)
-    data.var = data.var.rename(index=adt_align_dict)
+    data.var = data.var.rename(index=csp_align_dict)
     data.var_names = data.var.index
     duplicated_genes = data.var_names.duplicated(keep='first')
     genes_to_keep = ~duplicated_genes
     data = data[:, genes_to_keep]
-    gene_name = list(adt_token_dict.keys())
+    gene_name = list(csp_token_dict.keys())
     adt_name = data.var.index.tolist()
     common_elements = set(adt_name) & set(gene_name)
     print("ADT gene list presence in AnnData object", len(common_elements))
@@ -141,7 +122,7 @@ def prepare_data_mouse(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
         "gene_ids": input_gene_ids_train,
         "values": input_values_train,
         "target_values": target_values_train,
-        "adt_values": torch.tensor(adata_protein.X, dtype=torch.float32),
+        "adt_values": torch.tensor(adata_protein.X.toarray(), dtype=torch.float32),
         "species_values": torch.ones_like(target_values_train).to(input_gene_ids_train.dtype),
     }
     return train_data_pt
@@ -161,7 +142,7 @@ def prepare_data_human(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
         "gene_ids": input_gene_ids_train,
         "values": input_values_train,
         "target_values": target_values_train,
-        "adt_values": torch.tensor(adata_protein.X, dtype=torch.float32),
+        "adt_values": torch.tensor(adata_protein.X.toarray(), dtype=torch.float32),
         "species_values": torch.zeros_like(target_values_train).to(input_gene_ids_train.dtype),
     }
     return train_data_pt
@@ -374,9 +355,8 @@ class CombinedModel(nn.Module):
 
 hyperparameter_defaults = dict(
     seed=0,
-    dataset_name="ms",
     do_train=True,
-    load_model="/home/jiboya/captain",
+    load_model="/home/jiboya/captain/scgpt_model",
     mask_ratio=0.15,
     epochs=40,
     n_bins=51,
@@ -483,8 +463,7 @@ if ADV and DAB:
     raise ValueError("ADV and DAB cannot be both True.")
 DAB_separate_optim = True if DAB > 1 else False
 
-dataset_name = config.dataset_name
-save_dir = Path(f"/home/jiboya/captain/")
+save_dir = Path(f"/home/jiboya/captain/pretrain_model")
 save_dir.mkdir(parents=True, exist_ok=True)
 print(f"save to {save_dir}")
 logger = scg.logger
@@ -604,7 +583,7 @@ best_avg_bio = 0.0
 best_model = None
 
 for k in range(epochs):
-    fold_fold_1 = "/home/jiboya/captain/"
+    fold_fold_1 = "/home/jiboya/captain/human/"
     species = "human"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
@@ -680,7 +659,7 @@ for k in range(epochs):
                 scheduler_D.step()
                 scheduler_E.step()
 
-    fold_fold_1 = "/home/jiboya/captain/"
+    fold_fold_1 = "/home/jiboya/captain/mouse/"
     species = "mouse"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
