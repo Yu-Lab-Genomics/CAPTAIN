@@ -147,7 +147,7 @@ class PerformerLM_ADT(nn.Module):
         self.max_seq_len = max_seq_len
         self.token_emb = nn.Embedding(num_tokens, dim)
         self.pos_emb = torch.zeros_like
-        self.layer_pos_emb = Always(None)
+        # self.layer_pos_emb = Always(None)
         self.layers = nn.ModuleList()
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
