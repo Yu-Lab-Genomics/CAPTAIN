@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch
 import torch.nn.functional as F
-from torch import tensor, abs as torch_abs, logical_not, log, clamp
+from torch import tensor, abs as torch_abs, logical_not
 
 def masked_adt_loss(
     input: torch.Tensor, target: torch.Tensor, mask: torch.Tensor
@@ -14,7 +14,6 @@ def masked_adt_loss(
     loss = torch.abs(target-input) * mask
     return loss.sum() / mask.sum()
 
- 
 
 def masked_mse_loss(
     input: torch.Tensor, target: torch.Tensor, mask: torch.Tensor
@@ -31,8 +30,8 @@ def quantile_loss(
     pred: torch.Tensor, truth: torch.Tensor, mask: torch.Tensor
 ) -> torch.Tensor:
     mask=mask.float()
-    # q = tensor([0.1, 0.25, 0.75, 0.9], device = pred.device)
-    q = tensor([0.05,0.15,0.25,0.35,0.45,0.55,0.65,0.75,0.85,0.95], device = pred.device)
+    q = tensor([0.1, 0.25, 0.75, 0.9], device = pred.device)
+    # q = tensor([0.05,0.15,0.25,0.35,0.45,0.55,0.65,0.75,0.85,0.95], device = pred.device)
     bias = pred - truth[:, :, None]
     
     I_over = bias.detach() > 0.
@@ -147,7 +146,7 @@ class PerformerLM_ADT(nn.Module):
         self.max_seq_len = max_seq_len
         self.token_emb = nn.Embedding(num_tokens, dim)
         self.pos_emb = torch.zeros_like
-        self.layer_pos_emb = Always(None)
+        # self.layer_pos_emb = Always(None)
         self.layers = nn.ModuleList()
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
@@ -168,7 +167,7 @@ class PerformerLM_ADT(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 10)
+            nn.Linear(64, 4)
         ) if not tie_embed else None
 
     def forward(self, x, other_embedding=None, attn_mask=None, output_attentions=False, **kwargs):
