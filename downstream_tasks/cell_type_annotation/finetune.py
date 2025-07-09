@@ -371,7 +371,7 @@ if __name__ == "__main__":
     if config.load_model:
         model_dir = Path(config.load_model)
         model_config_file = model_dir / "args.json"
-        model_file = model_dir / "our_PBMC_model.pt"
+        model_file = model_dir / "CAPTAIN_Base.pt"
         vocab_file = model_dir / "vocab.json"
         vocab = GeneVocab.from_file(vocab_file)
         for s in special_tokens:
