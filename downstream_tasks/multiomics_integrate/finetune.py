@@ -1,44 +1,22 @@
 from rna_model import TransformerModel, AdversarialDiscriminator
 from protein_model import BLIP_Pretrain
-from protein_model.loss import masked_mse_loss, quantile_loss, masked_relative_error, criterion_neg_log_bernoulli
-import scanpy as sc
-import numpy as np
-import pandas as pd
-import anndata as ad
-import pickle as pkl
-import mudata as md
-from mudata import MuData
-import muon as mu
-import os
-import json
-from tqdm import tqdm
+from protein_model import masked_mse_loss, quantile_loss
+import scanpy as sc,numpy as np,pandas as pd,anndata as ad,pickle as pkl,scgpt as scg
+import os,json,sys,time,torch,argparse,pickle
 import scipy.sparse as sp
 from pathlib import Path
-import shutil
-import sys
-from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-import time
-import random
-from typing import List, Tuple, Dict, Union, Optional
-import warnings
-from torch.utils.data.distributed import DistributedSampler
-import torch
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
-import scipy
 from scipy.sparse import issparse
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
-sys.path.insert(0, "../")
-import scgpt as scg
 from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
 from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
-from scgpt import SubsetsBatchSampler
-from scgpt.utils import set_seed, category_str2int, eval_scib_metrics
-
+from scgpt.utils import set_seed
+sys.path.insert(0, "../")
 def read_json_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         data = json.load(file)
@@ -133,10 +111,7 @@ class SeqDataset(Dataset):
 
 def prepare_dataloader(data_pt, batch_size, shuffle=False, intra_domain_shuffle=False, drop_last=False, num_workers=0, distributed=False):
     dataset = SeqDataset(data_pt)
-    if distributed:
-        sampler = DistributedSampler(dataset)
-    else:
-        sampler = None
+    sampler = None
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -175,22 +150,13 @@ def train(model, loader, device, vocab, pad_token, optimizer, scaler, config):
         adt_data = torch.arange(0, adt_values.shape[1], device=adt_values.device).repeat(adt_values.shape[0], 1)
         batch_labels = batch_data["batch_labels"].to(device) if "batch_labels" in batch_data else None
         with torch.cuda.amp.autocast(enabled=config["amp"]):
-            if isinstance(model, DDP):
-                output_dict, transformer_out = model.module.rna_model(
+
+            output_dict, transformer_out = model.rna_model(
                     input_gene_ids, input_values, species_values, src_key_padding_mask=src_key_padding_mask,
                     batch_labels=batch_labels if config["INPUT_BATCH_LABELS"] or config["DSBN"] else None,
                     CLS=config["CLS"], CCE=config["CCE"], MVC=config["MVC"], ECS=config["ECS"]
                 )
-                adt_embeddings, adt_to_out, adt_to_out_quantiles, adt_gene_atten, labels_adt_data, adt_mask = model.module.adt_model(
-                    adt_data, transformer_out, src_key_padding_mask, adt_values, output_atten=False
-                )
-            else:
-                output_dict, transformer_out = model.rna_model(
-                    input_gene_ids, input_values, species_values, src_key_padding_mask=src_key_padding_mask,
-                    batch_labels=batch_labels if config["INPUT_BATCH_LABELS"] or config["DSBN"] else None,
-                    CLS=config["CLS"], CCE=config["CCE"], MVC=config["MVC"], ECS=config["ECS"]
-                )
-                adt_embeddings, adt_to_out, adt_to_out_quantiles, adt_gene_atten, labels_adt_data, adt_mask = model.adt_model(
+            adt_embeddings, adt_to_out, adt_to_out_quantiles, adt_gene_atten, labels_adt_data, adt_mask = model.adt_model(
                     adt_data, transformer_out, src_key_padding_mask, adt_values, output_atten=False
                 )
             masked_positions = input_values.eq(-1)
@@ -234,20 +200,12 @@ def evaluate(model, loader, device, vocab, pad_token, save_dir):
             species_values = batch_data["species_values"].to(device)
             adt_values = batch_data["adt_values"].to(device)
             adt_data = torch.arange(0, adt_values.shape[1], device=adt_values.device).repeat(adt_values.shape[0], 1)
-            if isinstance(model, DDP):
-                output_dict, transformer_out = model.module.rna_model(
+            batch_labels = batch_data["batch_labels"].to(device) if "batch_labels" in batch_data else None
+            output_dict, transformer_out = model.rna_model(
                     input_gene_ids, input_values, species_values, src_key_padding_mask=src_key_padding_mask,
-                    batch_labels=None, CLS=False, CCE=False, MVC=False, ECS=False
+                    batch_labels=batch_labels, CLS=False, CCE=False, MVC=False, ECS=False
                 )
-                adt_embeddings, _, _, _, _, _ = model.module.adt_model(
-                    adt_data, transformer_out, src_key_padding_mask, adt_values, output_atten=False
-                )
-            else:
-                output_dict, transformer_out = model.rna_model(
-                    input_gene_ids, input_values, species_values, src_key_padding_mask=src_key_padding_mask,
-                    batch_labels=None, CLS=False, CCE=False, MVC=False, ECS=False
-                )
-                adt_embeddings, _, _, _, _, _ = model.adt_model(
+            adt_embeddings, _, _, _, _, _ = model.adt_model(
                     adt_data, transformer_out, src_key_padding_mask, adt_values, output_atten=False
                 )
             adt_emb.append(adt_embeddings[:, -1, :].cpu())
@@ -298,17 +256,13 @@ if __name__ == "__main__":
 
     set_seed(args.seed)
 
-    if args.mode == "train":
-        dist.init_process_group(backend='gloo')
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-    else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    vocab_temp = read_json_file("/home/jiboya/captain/pretrain/vocab.json")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
     human_mouse_align = read_pickle_file('/home/jiboya/captain/token_dict/human_mouse_align.pickle')
-    adt_token_dict = read_pickle_file('/home/jiboya/captain/token_dict/adt_token_dict.pickle')
-    adt_align_dict = read_pickle_file('/home/jiboya/captain/token_dict/adt_align_dict.pickle')
+    adt_token_dict = read_pickle_file('/home/jiboya/captain/token_dict/csp_token_dict.pickle')
+    adt_align_dict = read_pickle_file('/home/jiboya/captain/token_dict/csp_align_dict.pickle')
 
     adata = sc.read_h5ad(args.rna_file)
     adata_protein = sc.read_h5ad(args.adt_file)
@@ -318,14 +272,13 @@ if __name__ == "__main__":
     adata.var["gene_name"] = adata.var.index.tolist()
     adata.var["id_in_vocab"] = [1 if gene in vocab_temp else -1 for gene in adata.var["gene_name"]]
     adata = adata[:, adata.var["id_in_vocab"] >= 0]
-    if args.mode == "train":
-        from sklearn import preprocessing
-        le = preprocessing.LabelEncoder()
-        encoded_batch = le.fit_transform(adata.obs['batch_id'].values)
-        adata.obs["batch_id"] = encoded_batch
-        batch_ids = np.array(adata.obs["batch_id"].tolist())
-    else:
-        batch_ids = None
+    
+    from sklearn import preprocessing
+    le = preprocessing.LabelEncoder()
+    encoded_batch = le.fit_transform(adata.obs['sample_id'].values)
+    adata.obs["batch_id"] = encoded_batch
+    batch_ids = np.array(adata.obs["batch_id"].tolist())
+
 
     preprocessor = Preprocessor(
         use_key="X",
@@ -348,7 +301,7 @@ if __name__ == "__main__":
     if args.load_model:
         model_dir = Path(args.load_model)
         model_config_file = model_dir / "args.json"
-        model_file = model_dir / "CAPTAIN_Base.pt" if args.mode == "train" else model_dir / "pretrain_model.pt"
+        model_file = model_dir / "CAPTAIN_Base.pt" if args.mode == "train" else model_dir / "8_pretrain_model.pt.pt"
         vocab_file = model_dir / "vocab.json"
         vocab = GeneVocab.from_file(vocab_file)
         for s in ["<pad>", "<cls>", "<eoc>"]:
@@ -375,6 +328,7 @@ if __name__ == "__main__":
         all_counts, gene_ids, max_len=4001 if args.mode == "train" else 3001,
         vocab=vocab, pad_token="<pad>", pad_value=-2, append_cls=True, include_zero_gene=False
     )
+    
     train_data_pt = prepare_data(tokenized_train, adata_protein, args.species, args.mask_ratio, -1, -2, batch_ids)
     train_loader = prepare_dataloader(
         train_data_pt, batch_size=args.batch_size, shuffle=False,
@@ -410,8 +364,6 @@ if __name__ == "__main__":
 
     model = CombinedModel(model, adt_model)
     model.to(device)
-    #if args.mode == "train": 
-     #   model = DDP(model, device_ids=[args.local_rank])
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, eps=1e-4 if config["amp"] else 1e-8)
     scaler = torch.cuda.amp.GradScaler(enabled=config["amp"])
