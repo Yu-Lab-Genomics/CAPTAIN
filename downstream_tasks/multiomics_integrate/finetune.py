@@ -293,7 +293,7 @@ if __name__ == "__main__":
         binning=config["n_bins"],
         result_binned_key="X_binned"
     )
-    preprocessor(adata, batch_key=None)
+    preprocessor(adata, batch_key="sample_id" )
 
     all_counts = adata.layers["X_binned"].A if sp.issparse(adata.layers["X_binned"]) else adata.layers["X_binned"]
     genes = adata.var["gene_name"].tolist()
