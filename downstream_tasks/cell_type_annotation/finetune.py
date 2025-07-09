@@ -1,43 +1,19 @@
-from rna_model import TransformerModel, AdversarialDiscriminator
+from rna_model import TransformerModel
 from protein_model import BLIP_Pretrain
-from protein_model.loss import masked_mse_loss, quantile_loss, masked_relative_error, criterion_neg_log_bernoulli
-import scanpy as sc
-import numpy as np
-import pandas as pd
-import anndata as ad
-import pickle as pkl
-import mudata as md
-from mudata import MuData
-import muon as mu
-import os
-import json
-from tqdm import tqdm
+import scanpy as sc,numpy as np,pandas as pd,anndata as ad,scgpt as scg
+import os,sys,json,warnings,torch,argparse,pickle,time
 import scipy.sparse as sp
 from pathlib import Path
-import shutil
-import sys
-from torch.nn.parallel import DistributedDataParallel as DDP
-import torch.distributed as dist
-import time
-import random
-from typing import List, Tuple, Dict, Union, Optional
-import warnings
-from torch.utils.data.distributed import DistributedSampler
-import torch
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
-import scipy
 from scipy.sparse import issparse
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
-sys.path.insert(0, "../")
-import scgpt as scg
 from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
 from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
-from scgpt import SubsetsBatchSampler
-from scgpt.utils import set_seed, category_str2int, eval_scib_metrics
+sys.path.insert(0, "../")
 
 def read_json_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -50,7 +26,7 @@ def read_pickle_file(file_path):
     return data
 
 def preprocss_rna(data, species):
-    sc.pp.filter_genes(data, min_counts=10)
+    sc.pp.filter_genes(data, min_counts=20)
     sc.pp.filter_cells(data, min_counts=200)
     if species == "mouse":
         data.var = data.var.rename(index=human_mouse_align)
@@ -319,10 +295,10 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     args = parser.parse_args()
 
-    vocab_temp = read_json_file("/home/jiboya/captain/pretrain/vocab.json")
+    vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
     human_mouse_align = read_pickle_file('/home/jiboya/captain/token_dict/human_mouse_align.pickle')
-    adt_token_dict = read_pickle_file('/home/jiboya/captain/token_dict/adt_token_dict.pickle')
-    adt_align_dict = read_pickle_file('/home/jiboya/captain/token_dict/adt_align_dict.pickle')
+    adt_token_dict = read_pickle_file('/home/jiboya/captain/token_dict/csp_token_dict.pickle')
+    adt_align_dict = read_pickle_file('/home/jiboya/captain/token_dict/csp_align_dict.pickle')
 
     hyperparameter_defaults = dict(
         seed=0,
@@ -395,7 +371,7 @@ if __name__ == "__main__":
     if config.load_model:
         model_dir = Path(config.load_model)
         model_config_file = model_dir / "args.json"
-        model_file = model_dir / "CAPTAIN_Base.pt"
+        model_file = model_dir / "our_PBMC_model.pt"
         vocab_file = model_dir / "vocab.json"
         vocab = GeneVocab.from_file(vocab_file)
         for s in special_tokens:
