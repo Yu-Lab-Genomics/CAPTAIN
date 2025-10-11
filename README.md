@@ -34,10 +34,10 @@ CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Oth
     ```bash
     conda activate captain
     ```
-4.  **Install requried packages:** We have included a `requirements.txt` file. This file lists the necessary Python packages required to run the model:
+4.  **Install requried packages:** We have included a `requirements.txt` file. This file lists the necessary Python packages required to run the model. Among these, [scgpt](https://github.com/bowang-lab/scGPT) is a required package as it is used for initializing the model with pre-trained weights.
 
     ```bash
-    pip install -r requirements.txt
+    pip install -r requirements.txt && pip install scgpt
     ```
 
     
