@@ -26,7 +26,7 @@ CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Oth
 2.  **Create the environment:** Navigate to the root directory of this repository in your terminal or Anaconda Prompt. Then, execute the following command to create the CAPTAIN environment:
 
     ```bash
-    conda env create -n CAPTAIN
+    conda create -n captain python==3.10.0
     ```
 
 3.  **Activate the environment:** Once the environment is created, activate it using the following command:
