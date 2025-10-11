@@ -3,6 +3,9 @@ import pandas as pd
 import pickle as pkl
 import numpy as np
 from sklearn.decomposition import PCA
+import os
+
+DATA_DIR = '/home/jiboya/captain/'
 
 def process_gene_features(gene_list: dict, feature_dict: dict, feature_dim: int = 512) -> np.ndarray:
     """
@@ -66,20 +69,20 @@ def dict_align(dict_in: dict, alignment_dict: dict) -> dict:
     return dict_out
 
 # Load human-mouse gene alignment
-with open('/home/jiboya/captain/human_mouse_align.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'human_mouse_align.pickle'), 'rb') as fp:
     human_mouse_align = pkl.load(fp)
 
 # Load human gene names
-human_gene_name = read_json_file("/home/jiboya/captain/vocab.json")
+human_gene_name = read_json_file(os.path.join(DATA_DIR, "vocab.json"))
 
 # Load human prior knowledge embeddings
-with open('/home/jiboya/captain/Human_dim_768_gene_28291_random.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'Human_dim_768_gene_28291_random.pickle'), 'rb') as fp:
     human_coexpress_emb = pkl.load(fp)
-with open('/home/jiboya/captain/Human_dim_768_gene_28291_random_2.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'Human_dim_768_gene_28291_random_2.pickle'), 'rb') as fp:
     human_gene_family_emb = pkl.load(fp)
-with open('/home/jiboya/captain/human_PECA_vec.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'human_PECA_vec.pickle'), 'rb') as fp:
     human_peca_emb = pkl.load(fp)
-with open('/home/jiboya/captain/human_emb_768.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'human_emb_768.pickle'), 'rb') as fp:
     human_promoter_emb = pkl.load(fp)
 
 # Reduce dimensionality of human embeddings
@@ -96,16 +99,16 @@ human_promoter_processed = process_gene_features(human_gene_name, human_promoter
 
 # Combine human prior knowledge
 human_prior_knowledge = np.concatenate([human_coexpress_processed, human_gene_family_processed, human_peca_processed, human_promoter_processed], axis=1)
-np.save("/home/jiboya/captain/human_prior_knwo.npy", human_prior_knowledge)
+np.save(os.path.join(DATA_DIR, "human_prior_knwo.npy"), human_prior_knowledge)
 
 # Load mouse prior knowledge embeddings
-with open('/home/jiboya/captain/Mouse_dim_768_gene_27444_random.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'Mouse_dim_768_gene_27444_random.pickle'), 'rb') as fp:
     mouse_coexpress_emb = pkl.load(fp)
-with open('/home/jiboya/captain/Mouse_dim_768_gene_27934_random.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'Mouse_dim_768_gene_27934_random.pickle'), 'rb') as fp:
     mouse_gene_family_emb = pkl.load(fp)
-with open('/home/jiboya/captain/mouse_PECA_vec.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'mouse_PECA_vec.pickle'), 'rb') as fp:
     mouse_peca_emb = pkl.load(fp)
-with open('/home/jiboya/captain/mouse_emb_768.pickle', 'rb') as fp:
+with open(os.path.join(DATA_DIR, 'mouse_emb_768.pickle'), 'rb') as fp:
     mouse_promoter_emb = pkl.load(fp)
 
 # Align and reduce dimensionality of mouse embeddings
@@ -127,4 +130,4 @@ mouse_promoter_processed = process_gene_features(human_gene_name, mouse_promoter
 
 # Combine mouse prior knowledge
 mouse_prior_knowledge = np.concatenate([mouse_coexpress_processed, mouse_gene_family_processed, mouse_peca_processed, mouse_promoter_processed], axis=1)
-np.save("/home/jiboya/captain/mouse_prior_knwo.npy", mouse_prior_knowledge)
+np.save(os.path.join(DATA_DIR, "mouse_prior_knwo.npy"), mouse_prior_knowledge)
