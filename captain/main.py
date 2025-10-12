@@ -42,12 +42,12 @@ device = torch.device("cuda", local_rank)
 seed_all(config.seed + dist.get_rank())
 
 # Load external data
-vocab_temp = read_json_file("/home/jiboya/captain/vocab.json")
-with open('/home/jiboya/captain/human_mouse_align.pickle', 'rb') as fp:
+vocab_temp = read_json_file("./prior_know/vocab.json")
+with open('./prior_know/human_mouse_align.pickle', 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('/home/jiboya/captain/adt_token_dict.pickle', 'rb') as fp:
+with open('./prior_know/adt_token_dict.pickle', 'rb') as fp:
     adt_token_dict = pkl.load(fp)
-with open('/home/jiboya/captain/adt_align_dict.pickle', 'rb') as fp:
+with open('./prior_know/adt_align_dict.pickle', 'rb') as fp:
     adt_align_dict = pkl.load(fp)
 
 # Model initialization
@@ -110,11 +110,11 @@ criterion = masked_mse_loss
 criterion_quantile = quantile_loss
 
 # Training loop
-save_dir = Path("/home/jiboya/captain/")
+save_dir = Path("./")
 save_dir.mkdir(parents=True, exist_ok=True)
 for epoch in range(config.epochs):
     for species in ["human", "mouse"]:
-        fold_fold_1 = "/home/jiboya/captain/"
+        fold_fold_1 = "./"
         save_model_count = 0
         for file_name in os.listdir(fold_fold_1):
             save_model_count += 1
