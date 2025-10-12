@@ -215,7 +215,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, choices=["train", "eval"], required=True)
     parser.add_argument("--species", type=str, default="human")
     parser.add_argument("--rna_file", type=str, required=True)
-    parser.add_argument("--save_dir", type=str, default="/home/jiboya/captain/results")
+    parser.add_argument("--save_dir", type=str, default="./results")
     parser.add_argument("--load_model", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mask_ratio", type=float, default=0.0)
@@ -255,8 +255,8 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
-    human_mouse_align = read_pickle_file('/home/jiboya/captain/token_dict/human_mouse_align.pickle')
+    vocab_temp = read_json_file("./token_dict/vocab.json")
+    human_mouse_align = read_pickle_file('./token_dict/human_mouse_align.pickle')
 
     adata = sc.read_h5ad(args.rna_file)
     adata = our_step_preporcess(adata, args.species, human_mouse_align, vocab_temp)
