@@ -11,13 +11,13 @@ def read_json_file(file_path):
         data = json.load(file)
     return data
 
-vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
+vocab_temp = read_json_file("./token_dict/vocab.json")
 
-with open('/home/jiboya/captain/token_dict/human_mouse_align.pickle', 'rb') as fp:
+with open('./token_dict/human_mouse_align.pickle', 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('/home/jiboya/captain/token_dict/csp_token_dict.pickle', 'rb') as fp:
+with open('./token_dict/csp_token_dict.pickle', 'rb') as fp:
     csp_token_dict = pkl.load(fp)
-with open('/home/jiboya/captain/token_dict/csp_align_dict.pickle', 'rb') as fp:
+with open('./token_dict/csp_align_dict.pickle', 'rb') as fp:
     csp_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
@@ -90,8 +90,8 @@ def our_step_preporcess(adata, adata_protein, species):
     adt_data_pre = adt_data_pre[common_obs]
     return rna_data_pre, adt_data_pre
 
-fold_fold_1 = "/home/jiboya/captain/human/"
-fold_fold_2 = "/home/jiboya/captain/human_done/"
+fold_fold_1 = "./human/"
+fold_fold_2 = "./human_done/"
 species = "human"
 for file_name in os.listdir(fold_fold_1):
 
