@@ -27,7 +27,7 @@ from .grad_reverse import grad_reverse
 class Human_RNA_Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        gene2vec_weight = np.load('/home/jiboya/scBLIP/prior_know/final_human_prior_knwo.npy')
+        gene2vec_weight = np.load('./prior_know/final_human_prior_knwo.npy')
         gene2vec_weight = torch.from_numpy(gene2vec_weight)
         self.emb = nn.Embedding.from_pretrained(gene2vec_weight)
 
@@ -38,7 +38,7 @@ class Human_RNA_Embedding(nn.Module):
 class Mouse_RNA_Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        gene2vec_weight = np.load('/home/jiboya/scBLIP/prior_know/final_mouse_prior_knwo.npy')
+        gene2vec_weight = np.load('./prior_know/final_mouse_prior_knwo.npy')
         gene2vec_weight = torch.from_numpy(gene2vec_weight)
         self.emb = nn.Embedding.from_pretrained(gene2vec_weight)
 
