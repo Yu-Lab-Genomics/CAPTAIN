@@ -30,13 +30,13 @@ def read_json_file(file_path):
         data = json.load(file)
     return data
 
-vocab_temp = read_json_file("/home/jiboya/captain/token_dict/vocab.json")
+vocab_temp = read_json_file("./token_dict/vocab.json")
 
-with open('/home/jiboya/captain/token_dict/human_mouse_align.pickle', 'rb') as fp:
+with open('./token_dict/human_mouse_align.pickle', 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('/home/jiboya/captain/token_dict/csp_token_dict.pickle', 'rb') as fp:
+with open('./token_dict/csp_token_dict.pickle', 'rb') as fp:
     csp_token_dict = pkl.load(fp)
-with open('/home/jiboya/captain/token_dict/csp_align_dict.pickle', 'rb') as fp:
+with open('./token_dict/csp_align_dict.pickle', 'rb') as fp:
     csp_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
@@ -356,7 +356,7 @@ class CombinedModel(nn.Module):
 hyperparameter_defaults = dict(
     seed=0,
     do_train=True,
-    load_model="/home/jiboya/captain/scgpt_model",
+    load_model="./scgpt_model",
     mask_ratio=0.15,
     epochs=40,
     n_bins=51,
@@ -463,7 +463,7 @@ if ADV and DAB:
     raise ValueError("ADV and DAB cannot be both True.")
 DAB_separate_optim = True if DAB > 1 else False
 
-save_dir = Path(f"/home/jiboya/captain/pretrain_model")
+save_dir = Path(f"./pretrain_model")
 save_dir.mkdir(parents=True, exist_ok=True)
 print(f"save to {save_dir}")
 logger = scg.logger
@@ -583,7 +583,7 @@ best_avg_bio = 0.0
 best_model = None
 
 for k in range(epochs):
-    fold_fold_1 = "/home/jiboya/captain/human/"
+    fold_fold_1 = "./human/"
     species = "human"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
@@ -659,7 +659,7 @@ for k in range(epochs):
                 scheduler_D.step()
                 scheduler_E.step()
 
-    fold_fold_1 = "/home/jiboya/captain/mouse/"
+    fold_fold_1 = "./mouse/"
     species = "mouse"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
