@@ -101,7 +101,7 @@ The transcriptional module within our model is initialized with weights from the
 The pre-training process can be initiated using the following command as an example. This command utilizes `torchrun` for distributed training:
 
 ```bash
-torchrun --nproc_per_node=4 --master_port=29512 /home/jiboya/captain/pretrain/torchrun.py --gpu 0,1,2,3
+torchrun --nproc_per_node=4 --master_port=29512 ./pretrain/torchrun.py --gpu 0,1,2,3
 ```
 ## Downstream Tasks
 ### Fine-tuning on Pre-trained Model for Cell Surface Protein Imputation
