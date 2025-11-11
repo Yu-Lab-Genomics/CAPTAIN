@@ -19,3 +19,4 @@ torchdata==0.7.1
 torchmetrics==1.6.1
 numba==0.60.0
 omicverse==1.6.10
+muon==0.1.7
