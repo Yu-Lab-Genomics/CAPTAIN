@@ -29,7 +29,7 @@ CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Oth
 Start a container based on the image and activate the enviroment:
 
 ```bash
-    docker run --gpus all -it --rm crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest
+    docker run --gpus all -it --rm crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest /bin/bash
  ```
 ```bash
     conda activate captain
