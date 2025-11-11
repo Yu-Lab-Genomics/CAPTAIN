@@ -24,7 +24,7 @@ CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Oth
 **Option 1: Download the docker image from Docker Hub.**
 
 ```bash
-    docker push crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest
+    docker pull crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest
  ```
 Start a container based on the image and activate the enviroment:
 
