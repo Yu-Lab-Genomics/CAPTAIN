@@ -20,12 +20,13 @@ Proteins act as the terminal effectors of cellular function, encoding the phenot
 ## Installation
 
 CAPTAIN is implemented based on Pytorch. We use pytorch-2.1.2 and cuda-12.8. Other version could be also compatible. We highly recommend using Anaconda to manage your Python environment. This ensures a consistent and reproducible setup for running our model. The environment for CAPTAIN can be obtained from the Aliyun Docker Hub registry or by installing the dependencies with requirement.txt.
+
 **Option 1: Download the docker image from Docker Hub.**
 
 ```bash
     docker push crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest
  ```
-Start a container based on the image and ativate the enviroment:
+Start a container based on the image and activate the enviroment:
 
 ```bash
     docker run --gpus all -it --rm crpi-nzg91d1psypntvav.cn-beijing.personal.cr.aliyuncs.com/jiboya/captain_image:latest
