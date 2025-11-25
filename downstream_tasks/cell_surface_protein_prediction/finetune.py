@@ -16,6 +16,7 @@ from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
 from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
 from scgpt.utils import set_seed
+import pickle as pkl
 sys.path.insert(0, "../")
 def read_json_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -190,7 +191,8 @@ def train(model, loader, device, vocab, pad_token, optimizer, scaler, config):
 
 def evaluate(model, loader, device, vocab, pad_token, save_dir):
     model.eval()
-    adt_emb = []
+    predicted_adt_data = []
+    true_adt_data = []
     with torch.no_grad():
         for batch, batch_data in enumerate(loader):
             input_gene_ids = batch_data["gene_ids"].to(device)
@@ -205,13 +207,23 @@ def evaluate(model, loader, device, vocab, pad_token, save_dir):
                     input_gene_ids, input_values, species_values, src_key_padding_mask=src_key_padding_mask,
                     batch_labels=batch_labels, CLS=False, CCE=False, MVC=False, ECS=False
                 )
-            adt_embeddings, _, _, _, _, _ = model.adt_model(
+            adt_embeddings, adt_to_out, adt_to_out_quantiles, adt_gene_atten, labels_adt_data, adt_mask = model.adt_model(
                     adt_data, transformer_out, src_key_padding_mask, adt_values, output_atten=False
                 )
-            adt_emb.append(adt_embeddings[:, -1, :].cpu())
-    adt_emb = torch.cat(adt_emb, dim=0)
-    with open(os.path.join(save_dir, "adt_embeddings.pickle"), 'wb') as file:
-        pickle.dump(adt_emb, file)
+            pair=[]
+            pair.extend(labels_adt_data.cpu().squeeze().tolist())
+            true_adt_data.append(pair)
+            pair=[]
+            pair.extend(adt_to_out.cpu().squeeze().tolist())
+            predicted_adt_data.append(pair)
+
+    name=args.save_dir / "true_adt_data_scale.pickle"
+    with open(name, 'wb') as file:
+        pkl.dump(true_adt_data, file)
+    name=args.save_dir / "predicted_adt_scale.pickle"
+    with open(name, 'wb') as file:
+        pkl.dump(predicted_adt_data, file)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="scRNA-seq and ADT data processing and model training/evaluation.")
