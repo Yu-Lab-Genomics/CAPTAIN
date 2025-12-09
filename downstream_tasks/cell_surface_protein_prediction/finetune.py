@@ -50,7 +50,7 @@ parser.add_argument('--data_adt_path', type=str, required=True, help='Path to Pr
 parser.add_argument('--save_dir', type=str, required=True, help='Directory to save outputs')
 parser.add_argument('--load_model_dir', type=str, default=None, help='Directory containing pre-trained model')
 parser.add_argument('--model_filename', type=str, default="CAPTAIN_Base.pt", help='Name of the model file to load')
-
+parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
 
 parser.add_argument('--species', type=str, default='human', choices=['human', 'mouse'], help='Species (human or mouse)')
 parser.add_argument('--epoch', type=int, default=30, help='Number of epochs')
@@ -513,7 +513,7 @@ model = TransformerModel(
     cell_emb_style=cell_emb_style, mvc_decoder_style=mvc_decoder_style,
     ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
     use_fast_transformer=fast_transformer, fast_transformer_backend=fast_transformer_backend,
-    pre_norm=config.pre_norm,
+    pre_norm=config.pre_norm, prior_know=args.prior_know,
 )
 
 if config.load_model is not None:
@@ -580,7 +580,6 @@ species = args.species
 
 
 adata = sc.read_h5ad(args.data_rna_path)
-
 adata.var_names_make_unique()
 adata_protein = sc.read_h5ad(args.data_adt_path)
 
