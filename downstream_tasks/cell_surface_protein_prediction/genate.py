@@ -36,6 +36,7 @@ parser.add_argument('--data_rna_path', type=str, required=True, help='Path to RN
 parser.add_argument('--data_adt_path', type=str, required=True, help='Path to Protein/ADT test h5ad file')
 parser.add_argument('--load_model_dir', type=str, required=True, help='Directory containing the trained model')
 parser.add_argument('--save_dir', type=str, required=True, help='Directory to save prediction results')
+parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
 
 
 parser.add_argument('--model_filename', type=str, default='pretrain_model.pt', help='Model filename')
@@ -441,13 +442,15 @@ ntokens = len(vocab)
 
 model = TransformerModel(
     ntokens, embsize, nhead, d_hid, nlayers,
-    nlayers_cls=3, n_cls=1 if CLS else 1, vocab=vocab, dropout=dropout,
-    pad_token=pad_token, pad_value=pad_value, do_mvc=MVC, do_dab=DAB,
-    use_batch_labels=INPUT_BATCH_LABELS, num_batch_labels=1, domain_spec_batchnorm=config.DSBN,
-    input_emb_style=input_emb_style, n_input_bins=n_input_bins, cell_emb_style=cell_emb_style,
-    mvc_decoder_style=mvc_decoder_style, ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
+    nlayers_cls=3, n_cls=1, vocab=vocab, dropout=dropout,
+    pad_token=pad_token, pad_value=pad_value,
+    do_mvc=MVC, do_dab=DAB, use_batch_labels=INPUT_BATCH_LABELS,
+    num_batch_labels=1, domain_spec_batchnorm=config.DSBN,
+    input_emb_style=input_emb_style, n_input_bins=n_input_bins,
+    cell_emb_style=cell_emb_style, mvc_decoder_style=mvc_decoder_style,
+    ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
     use_fast_transformer=fast_transformer, fast_transformer_backend=fast_transformer_backend,
-    pre_norm=config.pre_norm,
+    pre_norm=config.pre_norm, prior_know=args.prior_know,
 )
 
 if config.load_model is not None:
