@@ -52,7 +52,7 @@ from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
 from scgpt import SubsetsBatchSampler
 from scgpt.utils import set_seed, category_str2int, eval_scib_metrics
-from performer_pytorch import BLIP_Pretrain
+from model import BLIP_Pretrain
 
 # -----------------------------------------------------------------------------
 # Argument Parsing
