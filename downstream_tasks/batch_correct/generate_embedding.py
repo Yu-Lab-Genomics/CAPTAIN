@@ -82,9 +82,9 @@ vocab_temp = read_json_file(args.vocab_file)
 
 with open(os.path.join(args.token_dict_dir, 'human_mouse_align.pickle'), 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open(os.path.join(args.token_dict_dir, 'adt_token_dict.pickle'), 'rb') as fp:
+with open(os.path.join(args.token_dict_dir, 'csp_token_dict.pickle'), 'rb') as fp:
     adt_token_dict = pkl.load(fp)
-with open(os.path.join(args.token_dict_dir, 'adt_align_dict.pickle'), 'rb') as fp:
+with open(os.path.join(args.token_dict_dir, 'csp_align_dict.pickle'), 'rb') as fp:
     adt_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
