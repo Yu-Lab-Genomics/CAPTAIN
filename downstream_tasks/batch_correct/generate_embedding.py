@@ -30,7 +30,7 @@ from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
 from scgpt import SubsetsBatchSampler
 from scgpt.utils import set_seed
-from performer_pytorch import BLIP_Pretrain
+from model import BLIP_Pretrain
 
 # -----------------------------------------------------------------------------
 # Argument Parsing
@@ -44,6 +44,8 @@ def get_args():
     parser.add_argument("--vocab_file", type=str, default="/home/jiboya/Captain/pretrain/vocab.json", help="Path to vocab json")
     parser.add_argument("--token_dict_dir", type=str, default="/home/jiboya/scBLIP/token_dict/", help="Directory for token dictionaries")
     parser.add_argument("--load_model", type=str, default="/pool2/jiboya/captain_model/", help="Path to pretrained model directory")
+    parser.add_argument('--model_filename', type=str, default="pretrain_model.pt", help='Name of the model file to load')
+
     parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
 
     # Files
@@ -152,8 +154,8 @@ def check_adata_x(adata):
         sys.exit()
 
 def our_step_preporcess(adata, adata_protein, species):
-    check_adata_x(adata)
-    check_adata_x(adata_protein)
+    # check_adata_x(adata)
+    # check_adata_x(adata_protein)
     rna_data_pre = preprocss_rna(adata, species=species)
     adt_data_pre = preprocss_adt(adata_protein, species=species)
     common_obs = rna_data_pre.obs_names.intersection(adt_data_pre.obs_names)
@@ -317,10 +319,12 @@ scg.utils.add_file_handler(logger, save_dir / "run.log")
 # Model & Data Load
 # -----------------------------------------------------------------------------
 if config.load_model is not None:
+
     model_dir = Path(config.load_model)
-    model_config_file = model_dir / "args.json"
-    model_file = model_dir / "cmca00064-GSM5631553_model.pt"
-    vocab_file = model_dir / "vocab.json"
+    model_config_file = os.path.join(args.token_dict_dir, 'args.json')
+    model_file = model_dir / args.model_filename 
+    vocab_file = os.path.join(args.token_dict_dir, 'vocab.json')
+    
     vocab = GeneVocab.from_file(vocab_file)
     for s in special_tokens:
         if s not in vocab:
