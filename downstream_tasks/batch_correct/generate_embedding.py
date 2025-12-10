@@ -20,6 +20,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
+from sklearn import preprocessing
 
 # scGPT & Model Imports
 import scgpt as scg
@@ -59,6 +60,8 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--epochs", type=int, default=10)
+    # Added batch_col argument
+    parser.add_argument("--batch_col", type=str, default="batch", help="Column in adata.obs representing batch/donor")
     
     return parser.parse_args()
 
@@ -163,7 +166,8 @@ def our_step_preporcess(adata, adata_protein, species):
     adt_data_pre = adt_data_pre[common_obs]
     return rna_data_pre, adt_data_pre
 
-def prepare_data_human(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
+# Modified to accept batch_ids
+def prepare_data_human(batch_ids, sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
     masked_values_train = random_mask_value(
         tokenized_train["values"],
         mask_ratio=mask_ratio,
@@ -182,6 +186,7 @@ def prepare_data_human(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
         "target_values": target_values_train,
         "adt_values": torch.tensor(adata_protein.X, dtype=torch.float32),
         "species_values": torch.zeros_like(target_values_train).to(input_gene_ids_train.dtype),
+        "batch_labels": torch.from_numpy(batch_ids).long(), # Added batch_labels
     }
     return train_data_pt
 
@@ -273,7 +278,8 @@ CCE = False
 MVC = config.MVC
 ECS = config.ecs_thres > 0
 DAB = False
-INPUT_BATCH_LABELS = False
+# Changed to True to enable batch labels usage
+INPUT_BATCH_LABELS = True
 input_emb_style = "continuous"
 cell_emb_style = "cls"
 adv_E_delay_epochs = 0
@@ -347,6 +353,13 @@ adata_protein = sc.read_h5ad(file2)
 adata_protein.var.index = adata_protein.var.index.str.replace("AB_", "")
 adata, adata_protein = our_step_preporcess(adata, adata_protein, args.species)
 
+# Batch Processing
+le = preprocessing.LabelEncoder()
+encoded_batch = le.fit_transform(adata.obs[args.batch_col].values)
+adata.obs["batch_id"] = encoded_batch
+batch_ids = np.array(adata.obs["batch_id"].tolist())
+num_batch_types = len(set(batch_ids))
+
 adata.var.set_index(adata.var.index, inplace=True)
 data_is_raw = True
 adata.var["gene_name"] = adata.var.index.tolist()
@@ -394,7 +407,7 @@ tokenized_train = tokenize_and_pad_batch(
 )
 print(f"samples: {tokenized_train['genes'].shape[0]}, feature length: {tokenized_train['genes'].shape[1]}")
 
-train_data_pt = prepare_data_human(sort_seq_batch=per_seq_batch_sample)
+train_data_pt = prepare_data_human(batch_ids, sort_seq_batch=per_seq_batch_sample)
 train_loader = prepare_dataloader(
     train_data_pt,
     batch_size=batch_size,
@@ -410,8 +423,11 @@ model = TransformerModel(
     ntokens, embsize, nhead, d_hid, nlayers,
     nlayers_cls=3, n_cls=1, vocab=vocab, dropout=dropout,
     pad_token=pad_token, pad_value=pad_value,
-    do_mvc=MVC, do_dab=DAB, use_batch_labels=INPUT_BATCH_LABELS,
-    num_batch_labels=1, domain_spec_batchnorm=config.DSBN,
+    do_mvc=MVC, do_dab=DAB, 
+    # Enable batch labels and pass number of types
+    use_batch_labels=True,
+    num_batch_labels=num_batch_types, 
+    domain_spec_batchnorm=config.DSBN,
     input_emb_style=input_emb_style, n_input_bins=n_input_bins,
     cell_emb_style=cell_emb_style, mvc_decoder_style=mvc_decoder_style,
     ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
@@ -468,13 +484,16 @@ with torch.no_grad():
         species_values = batch_data["species_values"].to(device)
         adt_values = batch_data["adt_values"].to(device)
         adt_data = torch.arange(0, adt_values.shape[1], device=adt_values.device).repeat(adt_values.shape[0], 1)
+        # Added batch_labels retrieval
+        batch_labels = batch_data["batch_labels"].to(device)
 
         output_dict, transformer_out = model.rna_model(
             input_gene_ids,
             input_values,
             species_values,
             src_key_padding_mask=src_key_padding_mask,
-            batch_labels=None,
+            # Passed batch_labels to the model
+            batch_labels=batch_labels,
             CLS=CLS,
             CCE=CCE,
             MVC=MVC,
