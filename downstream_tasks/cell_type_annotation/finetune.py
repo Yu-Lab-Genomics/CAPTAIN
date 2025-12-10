@@ -66,7 +66,9 @@ def get_args():
     parser.add_argument("--vocab_file", type=str, default="/home/jiboya/Captain/pretrain/vocab.json", help="Path to vocab json")
     parser.add_argument("--token_dict_dir", type=str, default="/home/jiboya/scBLIP/token_dict/", help="Directory for token dictionaries")
     parser.add_argument("--load_model", type=str, default="/pool2/jiboya/captain_model", help="Path to pretrained model directory")
-    
+    parser.add_argument("--model_filename", type=str, default="CAPTAIN_Base.pt", help="Pretrained model filename")
+    parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
+
     # Files
     parser.add_argument("--train_rna_file", type=str, default="pbmc_gene_downsampled_train.h5ad")
     parser.add_argument("--train_adt_file", type=str, default="pbmc_protein_downsampled_train.h5ad")
@@ -106,9 +108,9 @@ vocab_temp = read_json_file(args.vocab_file)
 
 with open(os.path.join(args.token_dict_dir, 'human_mouse_align.pickle'), 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open(os.path.join(args.token_dict_dir, 'adt_token_dict.pickle'), 'rb') as fp:
+with open(os.path.join(args.token_dict_dir, 'csp_token_dict.pickle'), 'rb') as fp:
     adt_token_dict = pkl.load(fp)
-with open(os.path.join(args.token_dict_dir, 'adt_align_dict.pickle'), 'rb') as fp:
+with open(os.path.join(args.token_dict_dir, 'csp_align_dict.pickle'), 'rb') as fp:
     adt_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
@@ -527,9 +529,9 @@ scg.utils.add_file_handler(logger, save_dir / "run.log")
 # -----------------------------------------------------------------------------
 if config.load_model is not None:
     model_dir = Path(config.load_model)
-    model_config_file = model_dir / "args.json"
-    model_file = model_dir / "CAPTAIN_Base.pt"
-    vocab_file = model_dir / "vocab.json"
+    model_config_file = os.path.join(args.token_dict_dir, 'args.json')
+    model_file = model_dir / args.model_filename 
+    vocab_file = os.path.join(args.token_dict_dir, 'vocab.json')
     vocab = GeneVocab.from_file(vocab_file)
     for s in special_tokens:
         if s not in vocab:
@@ -547,14 +549,16 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ntokens = len(vocab)
 
 model = TransformerModel(
-    ntokens, embsize, nhead, d_hid, nlayers, nlayers_cls=3, n_cls=1 if CLS else 1,
-    vocab=vocab, dropout=dropout, pad_token=pad_token, pad_value=pad_value,
-    do_mvc=MVC, do_dab=DAB, use_batch_labels=INPUT_BATCH_LABELS, num_batch_labels=1,
-    domain_spec_batchnorm=config.DSBN, input_emb_style=input_emb_style,
-    n_input_bins=n_input_bins, cell_emb_style=cell_emb_style,
-    mvc_decoder_style=mvc_decoder_style, ecs_threshold=ecs_threshold,
-    explicit_zero_prob=explicit_zero_prob, use_fast_transformer=fast_transformer,
-    fast_transformer_backend=fast_transformer_backend, pre_norm=config.pre_norm,
+    ntokens, embsize, nhead, d_hid, nlayers,
+    nlayers_cls=3, n_cls=1, vocab=vocab, dropout=dropout,
+    pad_token=pad_token, pad_value=pad_value,
+    do_mvc=MVC, do_dab=DAB, use_batch_labels=INPUT_BATCH_LABELS,
+    num_batch_labels=1, domain_spec_batchnorm=config.DSBN,
+    input_emb_style=input_emb_style, n_input_bins=n_input_bins,
+    cell_emb_style=cell_emb_style, mvc_decoder_style=mvc_decoder_style,
+    ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
+    use_fast_transformer=fast_transformer, fast_transformer_backend=fast_transformer_backend,
+    pre_norm=config.pre_norm, prior_know=args.prior_know,
 )
 
 if config.load_model is not None:
