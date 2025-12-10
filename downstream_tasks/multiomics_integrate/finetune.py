@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
-
+from sklearn import preprocessing 
 
 sys.path.insert(0, "../")
 import scgpt as scg
@@ -42,8 +42,6 @@ from model import BLIP_Pretrain
 
 parser = argparse.ArgumentParser(description='Captain Training Script')
 
-
-
 parser.add_argument('--token_dict_dir', type=str, required=True, help='Directory containing token dict pickles')
 parser.add_argument('--data_rna_path', type=str, required=True, help='Path to RNA h5ad file')
 parser.add_argument('--data_adt_path', type=str, required=True, help='Path to Protein/ADT h5ad file')
@@ -57,6 +55,8 @@ parser.add_argument('--epoch', type=int, default=30, help='Number of epochs')
 parser.add_argument('--batch_size', type=int, default=20, help='Batch size')
 parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 parser.add_argument('--freeze', action='store_true', help='Freeze encoder weights')
+# Added batch_col argument
+parser.add_argument("--batch_col", type=str, default="batch", help="Column in adata.obs representing batch/donor")
 
 args = parser.parse_args()
 
@@ -64,7 +64,6 @@ args = parser.parse_args()
 sc.set_figure_params(figsize=(6, 6))
 os.environ["KMP_WARNINGS"] = "off"
 warnings.filterwarnings('ignore')
-
 
 
 def read_json_file(file_path):
@@ -84,7 +83,6 @@ with open(os.path.join(args.token_dict_dir, 'csp_align_dict.pickle'), 'rb') as f
     adt_align_dict = pkl.load(fp)
 
 
-
 def preprocss_rna(data, species):
     sc.pp.filter_genes(data, min_counts=10)
     sc.pp.filter_cells(data, min_counts=200)
@@ -95,9 +93,7 @@ def preprocss_rna(data, species):
 
     common_elements = set(rna_name) & set(vocab_temp.keys())
 
-
     if len(common_elements) == 0:
-
         sys.exit()
     return data
 
@@ -162,8 +158,8 @@ def our_step_preporcess(adata, adata_protein, species):
     return rna_data_pre, adt_data_pre
 
 
-
-def prepare_data_mouse(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
+# Modified to accept batch_ids
+def prepare_data_mouse(batch_ids, sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
     masked_values_train = random_mask_value(
         tokenized_train["values"],
         mask_ratio=mask_ratio,
@@ -182,10 +178,12 @@ def prepare_data_mouse(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
         "target_values": target_values_train,
         "adt_values": torch.tensor(adata_protein.X, dtype=torch.float32),
         "species_values": torch.ones_like(target_values_train).to(input_gene_ids_train.dtype),
+        "batch_labels": torch.from_numpy(batch_ids).long(), # Added batch_labels
     }
     return train_data_pt
 
-def prepare_data_human(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
+# Modified to accept batch_ids
+def prepare_data_human(batch_ids, sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
     masked_values_train = random_mask_value(
         tokenized_train["values"],
         mask_ratio=mask_ratio,
@@ -204,6 +202,7 @@ def prepare_data_human(sort_seq_batch=False) -> Tuple[Dict[str, torch.Tensor]]:
         "target_values": target_values_train,
         "adt_values": torch.tensor(adata_protein.X, dtype=torch.float32),
         "species_values": torch.zeros_like(target_values_train).to(input_gene_ids_train.dtype),
+        "batch_labels": torch.from_numpy(batch_ids).long(), # Added batch_labels
     }
     return train_data_pt
 
@@ -272,7 +271,6 @@ def train(model: nn.Module, loader: DataLoader) -> None:
     total_loss = 0.0
     start_time = time.time()
     
-
     total_cls = 0.0
     total_cce = 0.0
 
@@ -283,6 +281,8 @@ def train(model: nn.Module, loader: DataLoader) -> None:
         species_values = batch_data["species_values"].to(device)
         adt_values = batch_data["adt_values"].to(device)
         adt_data = torch.arange(0, adt_values.shape[1], device=adt_values.device).repeat(adt_values.shape[0], 1)
+        # Added batch_labels retrieval
+        batch_labels = batch_data["batch_labels"].to(device)
 
         with torch.cuda.amp.autocast(enabled=config.amp):
             output_dict, transformer_out = model.rna_model(
@@ -290,7 +290,8 @@ def train(model: nn.Module, loader: DataLoader) -> None:
                 input_values,
                 species_values,
                 src_key_padding_mask=src_key_padding_mask,
-                batch_labels=None if INPUT_BATCH_LABELS or config.DSBN else None,
+                # Passed batch_labels to the model
+                batch_labels=batch_labels if INPUT_BATCH_LABELS or config.DSBN else None,
                 CLS=CLS, CCE=CCE, MVC=MVC, ECS=ECS,
                 do_sample=do_sample_in_train,
             )
@@ -437,7 +438,8 @@ CCE = False
 MVC = config.MVC
 ECS = config.ecs_thres > 0
 DAB = False
-INPUT_BATCH_LABELS = False
+# Changed to True to enable batch labels usage
+INPUT_BATCH_LABELS = True 
 input_emb_style = "continuous"
 cell_emb_style = "cls"
 mvc_decoder_style = "inner product"
@@ -485,7 +487,6 @@ if config.load_model is not None:
     vocab_file = os.path.join(args.token_dict_dir, 'vocab.json')
     
 
-
     vocab = GeneVocab.from_file(vocab_file)
 
 
@@ -502,13 +503,92 @@ if config.load_model is not None:
     nlayers = model_configs["nlayers"]
 
 
+species = args.species 
+
+adata = sc.read_h5ad(args.data_rna_path)
+adata.var_names_make_unique()
+adata_protein = sc.read_h5ad(args.data_adt_path)
+
+adata, adata_protein = our_step_preporcess(adata, adata_protein, species)
+
+# Batch Processing
+le = preprocessing.LabelEncoder()
+encoded_batch = le.fit_transform(adata.obs[args.batch_col].values)
+adata.obs["batch_id"] = encoded_batch
+batch_ids = np.array(adata.obs["batch_id"].tolist())
+num_batch_types = len(set(batch_ids))
+
+adata.var.set_index(adata.var.index, inplace=True)
+data_is_raw = True
+adata.var["gene_name"] = adata.var.index.tolist()
+adata_protein.var["gene_name"] = adata_protein.var.index.tolist()
+
+adata.var["id_in_vocab"] = [1 if gene in vocab else -1 for gene in adata.var["gene_name"]]
+gene_ids_in_vocab = np.array(adata.var["id_in_vocab"])
+print(f"match {np.sum(gene_ids_in_vocab >= 0)}/{len(gene_ids_in_vocab)} genes in vocabulary of size {len(vocab)}.")
+adata = adata[:, adata.var["id_in_vocab"] >= 0]
+
+preprocessor = Preprocessor(
+    use_key="X",
+    filter_gene_by_counts=False,
+    filter_cell_by_counts=False,
+    normalize_total=True,
+    result_normed_key="X_normed",
+    log1p=True,
+    result_log1p_key="X_log1p",
+    subset_hvg=False,
+    hvg_flavor="seurat_v3" if data_is_raw else "cell_ranger",
+    binning=n_bins,
+    result_binned_key="X_binned",
+)
+preprocessor(adata, batch_key=None)
+
+input_layer_key = "X_binned" if input_style == "binned" else "X_normed"
+all_counts = adata.layers[input_layer_key].A if sp.issparse(adata.layers[input_layer_key]) else adata.layers[input_layer_key]
+genes = adata.var["gene_name"].tolist()
+train_data = all_counts
+
+if config.load_model is None:
+    vocab = Vocab(VocabPybind(genes + special_tokens, None))
+vocab.set_default_index(vocab["<pad>"])
+gene_ids = np.array(vocab(genes), dtype=int)
+
+tokenized_train = tokenize_and_pad_batch(
+    train_data,
+    gene_ids,
+    max_len=max_seq_len,
+    vocab=vocab,
+    pad_token=pad_token,
+    pad_value=pad_value,
+    append_cls=True,
+    include_zero_gene=include_zero_gene,
+)
+
+print(f"train set number of samples: {tokenized_train['genes'].shape[0]}, feature length: {tokenized_train['genes'].shape[1]}")
+
+if species == "human":
+    train_data_pt = prepare_data_human(batch_ids, sort_seq_batch=per_seq_batch_sample)
+elif species == "mouse":
+    train_data_pt = prepare_data_mouse(batch_ids, sort_seq_batch=per_seq_batch_sample)
+
+train_loader = prepare_dataloader(
+    train_data_pt,
+    batch_size=batch_size,
+    shuffle=False,
+    intra_domain_shuffle=True,
+    drop_last=False,
+)
+
 ntokens = len(vocab)
 model = TransformerModel(
     ntokens, embsize, nhead, d_hid, nlayers,
     nlayers_cls=3, n_cls=1, vocab=vocab, dropout=dropout,
     pad_token=pad_token, pad_value=pad_value,
-    do_mvc=MVC, do_dab=DAB, use_batch_labels=INPUT_BATCH_LABELS,
-    num_batch_labels=1, domain_spec_batchnorm=config.DSBN,
+    do_mvc=MVC, do_dab=DAB, 
+    # Enable batch labels and pass number of types
+    use_batch_labels=True,
+    num_batch_labels=num_batch_types, 
+    domain_spec_batchnorm=config.DSBN,
     input_emb_style=input_emb_style, n_input_bins=n_input_bins,
     cell_emb_style=cell_emb_style, mvc_decoder_style=mvc_decoder_style,
     ecs_threshold=ecs_threshold, explicit_zero_prob=explicit_zero_prob,
@@ -573,80 +653,6 @@ if ADV:
     scheduler_E = torch.optim.lr_scheduler.StepLR(optimizer_E, schedule_interval, gamma=config.schedule_ratio)
 
 scaler = torch.cuda.amp.GradScaler(enabled=config.amp)
-
-
-
-species = args.species 
-
-
-adata = sc.read_h5ad(args.data_rna_path)
-adata.var_names_make_unique()
-adata_protein = sc.read_h5ad(args.data_adt_path)
-
-
-adata, adata_protein = our_step_preporcess(adata, adata_protein, species)
-
-adata.var.set_index(adata.var.index, inplace=True)
-data_is_raw = True
-adata.var["gene_name"] = adata.var.index.tolist()
-adata_protein.var["gene_name"] = adata_protein.var.index.tolist()
-
-adata.var["id_in_vocab"] = [1 if gene in vocab else -1 for gene in adata.var["gene_name"]]
-gene_ids_in_vocab = np.array(adata.var["id_in_vocab"])
-print(f"match {np.sum(gene_ids_in_vocab >= 0)}/{len(gene_ids_in_vocab)} genes in vocabulary of size {len(vocab)}.")
-adata = adata[:, adata.var["id_in_vocab"] >= 0]
-
-preprocessor = Preprocessor(
-    use_key="X",
-    filter_gene_by_counts=False,
-    filter_cell_by_counts=False,
-    normalize_total=True,
-    result_normed_key="X_normed",
-    log1p=True,
-    result_log1p_key="X_log1p",
-    subset_hvg=False,
-    hvg_flavor="seurat_v3" if data_is_raw else "cell_ranger",
-    binning=n_bins,
-    result_binned_key="X_binned",
-)
-preprocessor(adata, batch_key=None)
-
-input_layer_key = "X_binned" if input_style == "binned" else "X_normed"
-all_counts = adata.layers[input_layer_key].A if sp.issparse(adata.layers[input_layer_key]) else adata.layers[input_layer_key]
-genes = adata.var["gene_name"].tolist()
-train_data = all_counts
-
-if config.load_model is None:
-    vocab = Vocab(VocabPybind(genes + special_tokens, None))
-vocab.set_default_index(vocab["<pad>"])
-gene_ids = np.array(vocab(genes), dtype=int)
-
-tokenized_train = tokenize_and_pad_batch(
-    train_data,
-    gene_ids,
-    max_len=max_seq_len,
-    vocab=vocab,
-    pad_token=pad_token,
-    pad_value=pad_value,
-    append_cls=True,
-    include_zero_gene=include_zero_gene,
-)
-
-print(f"train set number of samples: {tokenized_train['genes'].shape[0]}, feature length: {tokenized_train['genes'].shape[1]}")
-
-if species == "human":
-    train_data_pt = prepare_data_human(sort_seq_batch=per_seq_batch_sample)
-elif species == "mouse":
-    train_data_pt = prepare_data_mouse(sort_seq_batch=per_seq_batch_sample)
-
-train_loader = prepare_dataloader(
-    train_data_pt,
-    batch_size=batch_size,
-    shuffle=False,
-    intra_domain_shuffle=True,
-    drop_last=False,
-)
-
 
 
 for epoch in range(1, epochs + 1):
