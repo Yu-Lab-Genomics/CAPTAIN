@@ -1,6 +1,13 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+import warnings
+warnings.filterwarnings("ignore")
 from rna_model import TransformerModel, AdversarialDiscriminator
 from protein_model import BLIP_Pretrain,masked_mse_loss, quantile_loss
-
 import numpy as np,pandas as pd,anndata as ad,pickle as pkl,muon as mu,scgpt as scg,scanpy as sc
 import os,json,sys,time,random,warnings,torch,scipy
 import scipy.sparse as sp
@@ -20,7 +27,7 @@ from scgpt.tokenizer.gene_tokenizer import GeneVocab
 from scgpt.preprocess import Preprocessor
 from scgpt import SubsetsBatchSampler
 from scgpt.utils import set_seed
-sys.path.insert(0, "../")
+
 os.environ["KMP_WARNINGS"] = "off"
 warnings.filterwarnings('ignore')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
@@ -29,14 +36,12 @@ def read_json_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         data = json.load(file)
     return data
-
-vocab_temp = read_json_file("./token_dict/vocab.json")
-
-with open('./token_dict/human_mouse_align.pickle', 'rb') as fp:
+vocab_temp = os.path.join(parent_dir, "token_dict", "vocab.json")
+with open(os.path.join(parent_dir, "token_dict", "human_mouse_align.pickle"), 'rb') as fp:
     human_mouse_align = pkl.load(fp)
-with open('./token_dict/csp_token_dict.pickle', 'rb') as fp:
+with open(os.path.join(parent_dir, "token_dict", "csp_token_dict.pickle"), 'rb') as fp:
     csp_token_dict = pkl.load(fp)
-with open('./token_dict/csp_align_dict.pickle', 'rb') as fp:
+with open(os.path.join(parent_dir, "token_dict", "csp_align_dict.pickle"), 'rb') as fp:
     csp_align_dict = pkl.load(fp)
 
 def preprocss_rna(data, species):
@@ -54,6 +59,7 @@ def preprocss_rna(data, species):
     return data
 
 def preprocss_adt(data):
+    sc.pp.filter_cells(data, min_counts=1)
     sc.pp.normalize_total(data)
     sc.pp.log1p(data)
     sc.pp.scale(data)
@@ -197,6 +203,14 @@ def prepare_dataloader(
         pin_memory=True,
         sampler=dataset_sampler
     )
+    # data_loader = DataLoader(
+    #     dataset=dataset,
+    #     batch_size=batch_size,
+    #     shuffle=shuffle,
+    #     drop_last=drop_last,
+    #     num_workers=num_workers,
+    #     pin_memory=True
+    # )
     return data_loader
 
 def train(model: nn.Module, loader: DataLoader) -> None:
@@ -356,9 +370,9 @@ class CombinedModel(nn.Module):
 hyperparameter_defaults = dict(
     seed=0,
     do_train=True,
-    load_model="./scgpt_model",
+    load_model=os.path.join(current_dir, "scgpt_model", "best_model.pt"),
     mask_ratio=0.15,
-    epochs=40,
+    epochs=2,
     n_bins=51,
     MVC=False,
     ecs_thres=0.0,
@@ -463,17 +477,16 @@ if ADV and DAB:
     raise ValueError("ADV and DAB cannot be both True.")
 DAB_separate_optim = True if DAB > 1 else False
 
-save_dir = Path(f"./pretrain_model")
-save_dir.mkdir(parents=True, exist_ok=True)
+save_dir = current_dir
+# save_dir.mkdir(parents=True, exist_ok=True)
 print(f"save to {save_dir}")
 logger = scg.logger
-scg.utils.add_file_handler(logger, save_dir / "run.log")
+scg.utils.add_file_handler(logger, os.path.join(current_dir, "run.log"))
 
 if config.load_model is not None:
-    model_dir = Path(config.load_model)
-    model_config_file = model_dir / "args.json"
-    model_file = model_dir / "best_model.pt"
-    vocab_file = model_dir / "vocab.json"
+    model_config_file = os.path.join(parent_dir, "token_dict","args.json")
+    model_file = (config.load_model)
+    vocab_file = os.path.join(parent_dir, "token_dict","vocab.json") 
     vocab = GeneVocab.from_file(vocab_file)
     for s in special_tokens:
         if s not in vocab:
@@ -583,16 +596,17 @@ best_avg_bio = 0.0
 best_model = None
 
 for k in range(epochs):
-    fold_fold_1 = "./human/"
+    fold_fold_1 = os.path.join(current_dir, "human_pretrain_data")
     species = "human"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
         save_model_count += 1
         print(file_name)
-        a = mu.read_h5mu(fold_fold_1 + file_name)
+        a = mu.read_h5mu(os.path.join(fold_fold_1, file_name))
         adata = a.mod["rna"]
         adata_protein = a.mod["adt"]
         adata.var.set_index(adata.var.index, inplace=True)
+        adata, adata_protein=our_step_preporcess(adata, adata_protein, species)
         data_is_raw = True
         filter_gene_by_counts = False
         adata.var["gene_name"] = adata.var.index.tolist()
@@ -606,9 +620,9 @@ for k in range(epochs):
             use_key="X",
             filter_gene_by_counts=False,
             filter_cell_by_counts=False,
-            normalize_total=False,
+            normalize_total=True,
             result_normed_key="X_normed",
-            log1p=False,
+            log1p=True,
             result_log1p_key="X_log1p",
             subset_hvg=False,
             hvg_flavor="seurat_v3" if data_is_raw else "cell_ranger",
@@ -648,7 +662,7 @@ for k in range(epochs):
         )
         if config.do_train:
             train(model, loader=train_loader)
-            if save_model_count % 10 == 0:
+            if save_model_count % 1 == 0:
                 name_without_ext = os.path.splitext(file_name)[0]
                 name = str(save_dir) + "/" + str(name_without_ext) + "_model.pt"
                 torch.save(model.state_dict(), name)
@@ -659,16 +673,17 @@ for k in range(epochs):
                 scheduler_D.step()
                 scheduler_E.step()
 
-    fold_fold_1 = "./mouse/"
+    fold_fold_1 = os.path.join(current_dir, "mouse_pretrain_data")
     species = "mouse"
     save_model_count = 0
     for file_name in os.listdir(fold_fold_1):
         save_model_count += 1
         print(file_name)
-        a = mu.read_h5mu(fold_fold_1 + file_name)
+        a = mu.read_h5mu(os.path.join(fold_fold_1, file_name))
         adata = a.mod["rna"]
         adata_protein = a.mod["adt"]
         adata.var.set_index(adata.var.index, inplace=True)
+        adata, adata_protein=our_step_preporcess(adata, adata_protein, species)
         data_is_raw = True
         filter_gene_by_counts = False
         adata.var["gene_name"] = adata.var.index.tolist()
@@ -682,9 +697,9 @@ for k in range(epochs):
             use_key="X",
             filter_gene_by_counts=False,
             filter_cell_by_counts=False,
-            normalize_total=False,
+            normalize_total=True,
             result_normed_key="X_normed",
-            log1p=False,
+            log1p=True,
             result_log1p_key="X_log1p",
             subset_hvg=False,
             hvg_flavor="seurat_v3" if data_is_raw else "cell_ranger",
@@ -724,7 +739,7 @@ for k in range(epochs):
         )
         if config.do_train:
             train(model, loader=train_loader)
-            if save_model_count % 5 == 0:
+            if save_model_count % 1 == 0:
                 name_without_ext = os.path.splitext(file_name)[0]
                 name = str(save_dir) + "/" + str(name_without_ext) + "_model.pt"
                 torch.save(model.state_dict(), name)
