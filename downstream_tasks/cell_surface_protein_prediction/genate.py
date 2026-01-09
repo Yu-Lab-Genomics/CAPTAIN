@@ -1,12 +1,18 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+parent_dir = os.path.dirname(parent_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+import warnings
+warnings.filterwarnings("ignore")
 import argparse
 import json
-import os
 import pickle as pkl
-import sys
 import warnings
 from pathlib import Path
 from typing import Dict, Tuple
-
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -17,8 +23,6 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
-
-sys.path.insert(0, "../")
 import scgpt as scg
 from scgpt.model import TransformerModel
 from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
@@ -31,15 +35,13 @@ from model import BLIP_Pretrain
 parser = argparse.ArgumentParser(description='Captain Inference/Prediction Script')
 
 
-parser.add_argument('--token_dict_dir', type=str, required=True, help='Directory containing token dict pickles')
+parser.add_argument('--token_dict_dir', type=str, help='Directory containing token dict pickles',default=os.path.join(parent_dir, "token_dict"))
 parser.add_argument('--data_rna_path', type=str, required=True, help='Path to RNA test h5ad file')
-parser.add_argument('--data_adt_path', type=str, required=True, help='Path to Protein/ADT test h5ad file')
-parser.add_argument('--load_model_dir', type=str, required=True, help='Directory containing the trained model')
-parser.add_argument('--save_dir', type=str, required=True, help='Directory to save prediction results')
-parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
-
-
-parser.add_argument('--model_filename', type=str, default='pretrain_model.pt', help='Model filename')
+parser.add_argument('--data_protein_path', type=str, required=True, help='Path to Protein/ADT test h5ad file')
+parser.add_argument('--load_model_dir', type=str, help='Directory containing pre-trained model',default=os.path.join(current_dir,"results"))
+parser.add_argument('--save_dir', type=str, help='Directory to save outputs', default=os.path.join(current_dir, "results"))
+parser.add_argument('--prior_know', type=str, help='Directory containing prior knowledge file',default=os.path.join(parent_dir, "prior_knowledge"))
+parser.add_argument('--model_filename', type=str, default="pretrain_model.pt", help='Name of the model file to load')
 parser.add_argument('--species', type=str, default='human', choices=['human', 'mouse'], help='Species')
 parser.add_argument('--batch_size', type=int, default=1, help='Inference batch size')
 parser.add_argument('--layer_size', type=int, default=128, help='Model embedding size (default: 128)')
@@ -353,7 +355,7 @@ if config.load_model is not None:
 
 adata = sc.read_h5ad(args.data_rna_path)
 
-adata_protein = sc.read_h5ad(args.data_adt_path)
+adata_protein = sc.read_h5ad(args.data_protein_path)
 
 species = args.species
 adata, adata_protein = our_step_preporcess(adata, adata_protein, species)
