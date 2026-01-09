@@ -1,17 +1,16 @@
-import argparse
-import copy
-import gc
-import glob
-import itertools
-import json
-import os
-import pickle as pkl
-import random
-import shutil
 import sys
-import time
-import traceback
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+parent_dir = os.path.dirname(parent_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 import warnings
+warnings.filterwarnings("ignore")
+import argparse
+import json
+import pickle as pkl
+import time
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
@@ -58,28 +57,28 @@ from model import BLIP_Pretrain
 # Argument Parsing
 # -----------------------------------------------------------------------------
 def get_args():
-    parser = argparse.ArgumentParser(description="scGPT Fine-tuning and Inference")
+    parser = argparse.ArgumentParser(description="Fine-tuning and Inference")
 
     # Paths
-    parser.add_argument("--data_dir", type=str, default="/home/jiboya/Captain/cell_type_anno/dataset1/", help="Directory containing dataset files")
-    parser.add_argument("--save_dir", type=str, default="/home/jiboya/Captain/cell_type_anno/dataset1/", help="Directory to save results")
-    parser.add_argument("--vocab_file", type=str, default="/home/jiboya/Captain/pretrain/vocab.json", help="Path to vocab json")
-    parser.add_argument("--token_dict_dir", type=str, default="/home/jiboya/scBLIP/token_dict/", help="Directory for token dictionaries")
-    parser.add_argument("--load_model", type=str, default="/pool2/jiboya/captain_model", help="Path to pretrained model directory")
+    parser.add_argument("--data_dir", type=str, default=os.path.join(current_dir), help="Directory containing dataset files")
+    parser.add_argument("--save_dir", type=str, default=os.path.join(current_dir,"results"), help="Directory to save results")
+    parser.add_argument("--vocab_file", type=str, default=os.path.join(parent_dir, "token_dict",'vocab.json'), help="Path to vocab json")
+    parser.add_argument("--token_dict_dir", type=str, default=os.path.join(parent_dir, "token_dict"), help="Directory for token dictionaries")
+    parser.add_argument("--load_model", type=str, default=os.path.join(current_dir), help="Path to pretrained model directory")
     parser.add_argument("--model_filename", type=str, default="CAPTAIN_Base.pt", help="Pretrained model filename")
-    parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
+    parser.add_argument('--prior_know', type=str, default=os.path.join(parent_dir, "prior_knowledge"), help='Directory containing prior knowledge file')
 
     # Files
-    parser.add_argument("--train_rna_file", type=str, default="pbmc_gene_downsampled_train.h5ad")
-    parser.add_argument("--train_adt_file", type=str, default="pbmc_protein_downsampled_train.h5ad")
-    parser.add_argument("--test_rna_file", type=str, default="pbmc_gene_downsampled_test.h5ad")
-    parser.add_argument("--test_adt_file", type=str, default="pbmc_protein_downsampled_test.h5ad")
+    parser.add_argument("--train_rna_file", type=str, default="pbmc_gene_train.h5ad")
+    parser.add_argument("--train_adt_file", type=str, default="pbmc_protein_train.h5ad")
+    parser.add_argument("--test_rna_file", type=str, default="pbmc_gene_test.h5ad")
+    parser.add_argument("--test_adt_file", type=str, default="pbmc_protein_test.h5ad")
 
     # Settings
     parser.add_argument("--species", type=str, default="human", choices=["human", "mouse"])
-    parser.add_argument("--gpu_device", type=str, default="6", help="CUDA_VISIBLE_DEVICES")
+    parser.add_argument("--gpu_device", type=str, default="0", help="CUDA_VISIBLE_DEVICES")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=26)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--freeze", action="store_true", default=False)
@@ -183,7 +182,7 @@ def check_adata_x(adata):
 
 def our_step_preporcess(adata, adata_protein, species):
     check_adata_x(adata)
-    # check_adata_x(adata_protein) # Often ADT is float/normalized, check constraints if needed
+    check_adata_x(adata_protein) # Often ADT is float/normalized, check constraints if needed
     rna_data_pre = preprocss_rna(adata, species=species)
     adt_data_pre = preprocss_adt(adata_protein, species=species)
     common_obs = rna_data_pre.obs_names.intersection(adt_data_pre.obs_names)

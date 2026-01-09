@@ -697,7 +697,7 @@ class BLIP_Pretrain(nn.Module):
         self.adt_model = PerformerLM_ADT(
                             num_tokens = num_tokens2,# 7, 6是mask id，0是unmask id，pad token用不到
                             dim = embed_dim,
-                            depth = 1,
+                            depth = 6,
                             max_seq_len = adt_max_seq_len,# gene数目+1
                             heads = 8,
                             local_attn_heads = 0,
