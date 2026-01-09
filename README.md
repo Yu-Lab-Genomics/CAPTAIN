@@ -92,7 +92,7 @@ The following table describes the token dictionary files included in this reposi
 
 ## Prior Knowledge
 
-Building upon the prior knowledge resources offered in the original [GeneCompass](https://github.com/xCompass-AI/GeneCompass), we have processed and refined these resources to provide species-specific gene prior knowledge for both human and mouse (You can find these files in the [prior_knowledge](https://github.com/iamjiboya/CAPTAIN/blob/main/prior_knowledge) folder).
+Building upon the prior knowledge resources offered in the original [GeneCompass](https://github.com/xCompass-AI/GeneCompass), we have processed and refined these resources to provide species-specific gene prior knowledge for both human and mouse (You must first download the following files and place them in the [prior_knowledge](https://github.com/iamjiboya/CAPTAIN/blob/main/prior_knowledge) folder).
 
 The following files contain the processed prior knowledge:
 
