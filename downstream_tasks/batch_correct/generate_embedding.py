@@ -1,13 +1,18 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+parent_dir = os.path.dirname(parent_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+import warnings
+warnings.filterwarnings("ignore")
 import argparse
 import json
-import os
 import pickle as pkl
 import sys
-import time
-import warnings
 from pathlib import Path
 from typing import Dict, Tuple
-
 import anndata as ad
 import mudata as md
 import muon as mu
@@ -40,28 +45,26 @@ def get_args():
     parser = argparse.ArgumentParser(description="scGPT + BLIP Inference")
 
     # Paths
-    parser.add_argument("--data_dir", type=str, default="/home/jiboya/Captain/multiomics/dataset2/", help="Directory containing dataset files")
-    parser.add_argument("--save_dir", type=str, default="/home/jiboya/Captain/multiomics/dataset2/captain/", help="Directory to save embeddings")
-    parser.add_argument("--vocab_file", type=str, default="/home/jiboya/Captain/pretrain/vocab.json", help="Path to vocab json")
-    parser.add_argument("--token_dict_dir", type=str, default="/home/jiboya/scBLIP/token_dict/", help="Directory for token dictionaries")
-    parser.add_argument("--load_model", type=str, default="/pool2/jiboya/captain_model/", help="Path to pretrained model directory")
+    parser.add_argument("--data_dir", type=str, default=os.path.join(current_dir), help="Directory containing dataset files")
+    parser.add_argument('--save_dir', type=str, help='Directory to save outputs', default=os.path.join(current_dir, "results"))
+    parser.add_argument("--vocab_file", type=str, default=os.path.join(parent_dir, "token_dict",'vocab.json'), help="Path to vocab json")
+    parser.add_argument("--token_dict_dir", type=str, default=os.path.join(parent_dir, "token_dict"), help="Directory for token dictionaries")
+    parser.add_argument("--load_model", type=str, default=os.path.join(current_dir,"results"), help="Path to pretrained model directory")
     parser.add_argument('--model_filename', type=str, default="pretrain_model.pt", help='Name of the model file to load')
-
-    parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
-
+    parser.add_argument('--prior_know', type=str, help='Directory containing prior knowledge file',default=os.path.join(parent_dir, "prior_knowledge"))
     # Files
-    parser.add_argument("--rna_file", type=str, default="adata.h5ad", help="RNA h5ad filename")
-    parser.add_argument("--adt_file", type=str, default="adata_protein.h5ad", help="ADT h5ad filename")
+    parser.add_argument("--data_rna_path", type=str, default="adata.h5ad", help="RNA h5ad filename")
+    parser.add_argument("--data_protein_path", type=str, default="adata_protein.h5ad", help="ADT h5ad filename")
 
     # Settings
     parser.add_argument("--species", type=str, default="human", choices=["human", "mouse"])
-    parser.add_argument("--gpu_device", type=str, default="7", help="CUDA_VISIBLE_DEVICES")
+    parser.add_argument("--gpu_device", type=str, default="0", help="CUDA_VISIBLE_DEVICES")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--lr", type=float, default=1e-5)
-    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=1)
     # Added batch_col argument
-    parser.add_argument("--batch_col", type=str, default="batch", help="Column in adata.obs representing batch/donor")
+    parser.add_argument("--batch_col", type=str, default="donor", help="Column in adata.obs representing batch/donor")
     
     return parser.parse_args()
 
@@ -346,9 +349,9 @@ if config.load_model is not None:
     n_layers_cls = model_configs["n_layers_cls"]
 
 # Process Data
-file1 = os.path.join(args.data_dir, args.rna_file)
+file1 = os.path.join(args.data_dir, args.data_rna_path)
 adata = sc.read_h5ad(file1)
-file2 = os.path.join(args.data_dir, args.adt_file)
+file2 = os.path.join(args.data_dir, args.data_protein_path)
 adata_protein = sc.read_h5ad(file2)
 adata_protein.var.index = adata_protein.var.index.str.replace("AB_", "")
 adata, adata_protein = our_step_preporcess(adata, adata_protein, args.species)

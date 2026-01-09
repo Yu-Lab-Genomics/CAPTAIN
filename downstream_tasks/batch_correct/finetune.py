@@ -1,14 +1,19 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+parent_dir = os.path.dirname(parent_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+import warnings
+warnings.filterwarnings("ignore")
 import argparse
 import json
-import os
 import pickle as pkl
 import random
-import sys
 import time
-import warnings
 from pathlib import Path
 from typing import Dict, Tuple
-
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -25,7 +30,6 @@ from torchtext.vocab import Vocab
 from torchtext._torchtext import Vocab as VocabPybind
 from sklearn import preprocessing 
 
-sys.path.insert(0, "../")
 import scgpt as scg
 from scgpt.loss import (
     masked_mse_loss,
@@ -42,21 +46,20 @@ from model import BLIP_Pretrain
 
 parser = argparse.ArgumentParser(description='Captain Training Script')
 
-parser.add_argument('--token_dict_dir', type=str, required=True, help='Directory containing token dict pickles')
+parser.add_argument('--token_dict_dir', type=str, help='Directory containing token dict pickles',default=os.path.join(parent_dir, "token_dict"))
 parser.add_argument('--data_rna_path', type=str, required=True, help='Path to RNA h5ad file')
-parser.add_argument('--data_adt_path', type=str, required=True, help='Path to Protein/ADT h5ad file')
-parser.add_argument('--save_dir', type=str, required=True, help='Directory to save outputs')
-parser.add_argument('--load_model_dir', type=str, default=None, help='Directory containing pre-trained model')
+parser.add_argument('--data_protein_path', type=str, required=True, help='Path to Protein/ADT h5ad file')
+parser.add_argument('--save_dir', type=str, help='Directory to save outputs', default=os.path.join(current_dir, "results"))
+parser.add_argument('--load_model_dir', type=str, help='Directory containing pre-trained model',default=os.path.join(current_dir))
 parser.add_argument('--model_filename', type=str, default="CAPTAIN_Base.pt", help='Name of the model file to load')
-parser.add_argument('--prior_know', type=str, default=None, help='Directory containing prior knowledge file')
-
+parser.add_argument('--prior_know', type=str, help='Directory containing prior knowledge file',default=os.path.join(parent_dir, "prior_knowledge"))
 parser.add_argument('--species', type=str, default='human', choices=['human', 'mouse'], help='Species (human or mouse)')
-parser.add_argument('--epoch', type=int, default=30, help='Number of epochs')
+parser.add_argument('--epoch', type=int, default=1, help='Number of epochs')
 parser.add_argument('--batch_size', type=int, default=20, help='Batch size')
 parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 parser.add_argument('--freeze', action='store_true', help='Freeze encoder weights')
 # Added batch_col argument
-parser.add_argument("--batch_col", type=str, default="batch", help="Column in adata.obs representing batch/donor")
+parser.add_argument("--batch_col", type=str, default="donor", help="Column in adata.obs representing batch/donor")
 
 args = parser.parse_args()
 
@@ -507,7 +510,7 @@ species = args.species
 
 adata = sc.read_h5ad(args.data_rna_path)
 adata.var_names_make_unique()
-adata_protein = sc.read_h5ad(args.data_adt_path)
+adata_protein = sc.read_h5ad(args.data_protein_path)
 
 adata, adata_protein = our_step_preporcess(adata, adata_protein, species)
 
